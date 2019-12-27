@@ -13,6 +13,7 @@ import android.Manifest;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Message;
 import androidx.annotation.RequiresApi;
 import androidx.core.content.ContextCompat;
 import android.text.TextUtils;
@@ -131,6 +132,7 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
   protected static final String BLANK_URL = "about:blank";
   protected WebViewConfig mWebViewConfig;
 
+  protected RNCWebViewClient mRNCWebViewClient = null;
   protected RNCWebChromeClient mWebChromeClient = null;
   protected boolean mAllowsFullscreenVideo = false;
   protected @Nullable String mUserAgent = null;
@@ -177,6 +179,10 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
 
     settings.setAllowFileAccess(false);
     settings.setAllowContentAccess(false);
+    
+    settings.setJavaScriptCanOpenWindowsAutomatically(true);
+    settings.setSupportMultipleWindows(true);
+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       settings.setAllowFileAccessFromFileURLs(false);
       setAllowUniversalAccessFromFileURLs(webView, false);
@@ -532,7 +538,8 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
   @Override
   protected void addEventEmitters(ThemedReactContext reactContext, WebView view) {
     // Do not register default touch emitter and let WebView implementation handle touches
-    view.setWebViewClient(new RNCWebViewClient());
+    mRNCWebViewClient = new RNCWebViewClient();
+    view.setWebViewClient(mRNCWebViewClient);
   }
 
   @Override
@@ -693,6 +700,27 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
 
           mReactContext.removeLifecycleEventListener(this);
         }
+
+        @Override
+        public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+          WebView targetWebView = new WebView(reactContext); 
+          targetWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageStarted(WebView tab, String url, Bitmap favicon) {
+              if(!url.equals("about:blank")) {
+                tab.stopLoading();
+                dispatchEvent(view, new TopShouldStartLoadWithRequestEvent(
+                  view.getId(),
+                  mRNCWebViewClient.createWebViewEvent(view, url)
+                ));
+              }
+            }
+          });
+          WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+          transport.setWebView(targetWebView);
+          resultMsg.sendToTarget();
+          return true;
+        }
       };
       webView.setWebChromeClient(mWebChromeClient);
     } else {
@@ -700,11 +728,34 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
         mWebChromeClient.onHideCustomView();
       }
       mWebChromeClient = new RNCWebChromeClient(reactContext, webView) {
+
         @Override
         public Bitmap getDefaultVideoPoster() {
           return Bitmap.createBitmap(50, 50, Bitmap.Config.ARGB_8888);
         }
+
+        @Override
+        public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+          WebView targetWebView = new WebView(reactContext);
+          targetWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageStarted(WebView tab, String url, Bitmap favicon) {
+              if(!url.equals("about:blank")) {
+                tab.stopLoading();
+                dispatchEvent(view, new TopShouldStartLoadWithRequestEvent(
+                  view.getId(),
+                  mRNCWebViewClient.createWebViewEvent(view, url)
+                ));
+              }
+            }
+          });
+          WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+          transport.setWebView(targetWebView);
+          resultMsg.sendToTarget();
+          return true;
+        }
       };
+
       webView.setWebChromeClient(mWebChromeClient);
     }
   }
@@ -808,7 +859,7 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
           createWebViewEvent(webView, url)));
     }
 
-    protected WritableMap createWebViewEvent(WebView webView, String url) {
+    public WritableMap createWebViewEvent(WebView webView, String url) {
       WritableMap event = Arguments.createMap();
       event.putDouble("target", webView.getId());
       // Don't use webView.getUrl() here, the URL isn't updated to the new value yet in callbacks
