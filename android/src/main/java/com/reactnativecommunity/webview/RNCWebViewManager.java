@@ -707,12 +707,11 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
           targetWebView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView tab, String url, Bitmap favicon) {
-              if(!url.equals("about:blank")) {
+              if(!url.equals(BLANK_URL)) {
                 tab.stopLoading();
-                dispatchEvent(view, new TopShouldStartLoadWithRequestEvent(
-                  view.getId(),
-                  mRNCWebViewClient.createWebViewEvent(view, url)
-                ));
+                WritableMap data = mRNCWebViewClient.createWebViewEvent(view, url);
+                data.putString("target", "_blank");
+                dispatchEvent(view, new TopShouldStartLoadWithRequestEvent(view.getId(), data));
               }
             }
           });
@@ -740,12 +739,11 @@ public class RNCWebViewManager extends SimpleViewManager<WebView> {
           targetWebView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView tab, String url, Bitmap favicon) {
-              if(!url.equals("about:blank")) {
+              if(!url.equals(BLANK_URL)) {
                 tab.stopLoading();
-                dispatchEvent(view, new TopShouldStartLoadWithRequestEvent(
-                  view.getId(),
-                  mRNCWebViewClient.createWebViewEvent(view, url)
-                ));
+                WritableMap data = mRNCWebViewClient.createWebViewEvent(view, url);
+                data.putString("target", "_blank");
+                dispatchEvent(view, new TopShouldStartLoadWithRequestEvent(view.getId(), data));
               }
             }
           });
